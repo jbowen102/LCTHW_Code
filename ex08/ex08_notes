@@ -1,0 +1,2 @@
+There is no boolean type in C; ints of 0 or 1 are used.
+Always enclose your C code branches in {} parentheses to make explicit where each branch begins and ends.
