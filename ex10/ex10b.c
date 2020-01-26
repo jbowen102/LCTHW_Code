@@ -9,8 +9,8 @@ int main(int argc, char *argv[])
   }
 
   int i = 0;
-  for (i=0; argv[1][i] != '\0'; i++) {
-    char letter = argv[1][i];
+  char letter;
+  for (i=0, letter=argv[1][i]; letter != '\0'; i++, letter=argv[1][i]) {
 
     if (letter >= 97 && letter <= 122) {
       letter -= 32;
