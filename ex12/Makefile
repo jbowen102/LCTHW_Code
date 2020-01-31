@@ -1,6 +1,6 @@
 CLAGS=-Wall -g
 
-all: ex12
+all: ex12a
 
 clean:
-	rm -f ex12
+	rm -f ex12a
