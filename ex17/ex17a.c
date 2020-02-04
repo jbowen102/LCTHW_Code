@@ -136,7 +136,14 @@ void Database_set(struct Connection *conn, int id, const char *name,
 	addr->set = 1;
 
 	// WARNING: bug - read the How to Break It and fix this.
+	// printf("Size of 'name' %s: %ld\n", name, sizeof(name) / sizeof(char));
+	// char *res = strcpy(addr->name, name);
+	// char *res = strncpy(addr->name, name, sizeof(name) / sizeof(char));
 	char *res = strncpy(addr->name, name, MAX_DATA);
+	if (MAX_DATA > 0) {
+		addr->name[MAX_DATA-1] = '\0';
+	}
+	// printf("Size of 'addr->name' %s: %ld\n", addr->name, sizeof(addr->name) / sizeof(char));
 	// printf("Address ID %d: Name %s\n", addr->id, addr->name);
 
 	// demonstrate the strncpy bug
@@ -144,7 +151,14 @@ void Database_set(struct Connection *conn, int id, const char *name,
 		die("Name copy failed.");
 	}
 
+	// printf("Size of 'email' %s: %ld\n", email, sizeof(email) / sizeof(char));
+	// res = strcpy(addr->email, email);
+	// res = strncpy(addr->email, email, sizeof(email) / sizeof(char));
 	res = strncpy(addr->email, email, MAX_DATA);
+	if (MAX_DATA > 0) {
+		addr->name[MAX_DATA-1] = '\0';
+	}
+	// printf("Size of 'addr->email' %s: %ld\n", addr->email, sizeof(addr->email) / sizeof(char));
 	// printf("Address ID %d: Email %s\n", addr->id, addr->email);
 	if (!res) {
 		die("Email copy failed.");
@@ -198,7 +212,7 @@ int main(int argc, char *argv[])
 	int id = 0;
 
 	if (argc > 3) id = atoi(argv[3]);
-	if (id >= MAX_ROWS) die("There's not that many records.");
+	// if (id >= MAX_ROWS) die("There's not that many records.");
 
 	switch (action) {
 		case 'c':
