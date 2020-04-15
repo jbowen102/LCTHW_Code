@@ -87,7 +87,6 @@ int fill_log_list(struct Connection *list_conn, char log_list[MAX_NUM_FILES][MAX
   for (int n = 0; n < file_index; n++) {
     printf("%d) %s\n", n, log_list[n]);
   }
-  printf("\n");
 
   // log_info("filepath: %s", list_conn->entry);
 
@@ -97,23 +96,59 @@ error:
 }
 
 
+int string_search(struct Connection *file_conn, char *search_term)
+{
+  int search_length = strlen(search_term);
+  // If line is shorter than search term, skip:
+  if (strlen(file_conn->entry) < search_length) {
+    return 0;
+  }
+
+  printf("\n");
+  debug("[LINE]: %s", file_conn->entry);
+  debug("strlen(entry) = %ld", strlen(file_conn->entry));
+  debug("search_length for term \"%s\": %d", search_term, search_length);
+  debug("loop limit: %ld", strlen(file_conn->entry)-search_length);
+
+  for (int c = 0; c < strlen(file_conn->entry)-search_length+1; c++)
+  {
+    // debug("%d", c);
+
+    // int rc = strncmp(entry[c], search_term, search_length);
+    // if (rc == 0) {
+    //   printf("string match\n");
+    //   return 1;
+    // }
+  }
+  return 0;
+}
+
+
 int file_search(struct Connection *file_conn, char *search_term)
 {
+  printf("\n");
   log_info("file_search running on %s", file_conn->path);
 
-  fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
-  while (file_conn->entry[0]) {
+  char *ret = "s";
+
+  // fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
+  do {
     // Reset string to all 0s:
     memset(file_conn->entry, 0, strlen(file_conn->entry));
 
     // Read line in from file.
-    fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
+    ret = fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
     check(strlen(file_conn->entry) < MAX_BUFFER - 1, "Possible entry truncation: %s", file_conn->entry);
 
-    // search file_conn->entry for term(s) in question
-    printf("\t%s", file_conn->entry);
+    // Eliminate the trailing newline character:
+    file_conn->entry[strcspn(file_conn->entry, "\n")] = 0;
 
-  }
+    // search file_conn->entry for term(s) in question
+    int rc = string_search(file_conn, search_term);
+    if (rc == 1) {
+      printf("\t%s", file_conn->entry);
+    }
+  } while (ret != NULL);
 
   return 0;
 error:
@@ -123,6 +158,8 @@ error:
 
 int main(int argc, char *argv[])
 {
+  check(argc == 2, "Need two arguments.");
+
   char *log_list_loc = "./.logfind_files";
 
   struct Connection *list_conn = create_conn(log_list_loc);
