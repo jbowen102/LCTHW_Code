@@ -87,6 +87,7 @@ int fill_log_list(struct Connection *list_conn, char log_list[MAX_NUM_FILES][MAX
   for (int n = 0; n < file_index; n++) {
     printf("%d) %s\n", n, log_list[n]);
   }
+  printf("\n");
 
   // log_info("filepath: %s", list_conn->entry);
 
@@ -96,11 +97,23 @@ error:
 }
 
 
-int file_search(struct Connection *file_conn)
+int file_search(struct Connection *file_conn, char *search_term)
 {
-  log_info("file_search running w/ %s", file_conn->path);
-  // fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
-  // check(strlen(file_conn->entry) < MAX_BUFFER - 1, "Possible entry truncation: %s", file_conn->entry);
+  log_info("file_search running on %s", file_conn->path);
+
+  fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
+  while (file_conn->entry[0]) {
+    // Reset string to all 0s:
+    memset(file_conn->entry, 0, strlen(file_conn->entry));
+
+    // Read line in from file.
+    fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
+    check(strlen(file_conn->entry) < MAX_BUFFER - 1, "Possible entry truncation: %s", file_conn->entry);
+
+    // search file_conn->entry for term(s) in question
+    printf("\t%s", file_conn->entry);
+
+  }
 
   return 0;
 error:
@@ -119,12 +132,14 @@ int main(int argc, char *argv[])
   int file_count = fill_log_list(list_conn, log_list);
   check(file_count != -1, "fill_log_list failed");
 
+  char *search_term = argv[1];
+
   struct Connection *file_conn;
   for (int i = 0; i < file_count; i++)
   {
     file_conn = create_conn(log_list[i]);
 
-    int rc = file_search(file_conn);
+    int rc = file_search(file_conn, search_term);
     check(rc != -1, "file_search failed at file %d: %s", i, log_list[i]);
 
     close_conn(file_conn);
