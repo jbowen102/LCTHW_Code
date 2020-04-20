@@ -96,7 +96,32 @@ error:
 }
 
 
-int string_search(struct Connection *file_conn, char *search_term)
+// // Rabin-carp algorithm. Time complexity (expected): O(n+m), where n = strlen(file_conn->entry) and m = strlen(search_term)
+// int faster_substring_search(struct Connection *file_conn, char *search_term)
+// {
+//
+// }
+// Algorithm Design Manual 3.7.2 (p. 91)
+
+
+// // naive search. Time complexity (worst-case): O(nm), where n = strlen(file_conn->entry) and m = strlen(search_term)
+// // no longer used. Using strncmp directly in entry_search now.
+// int substring_search(char *search_window, char *search_term)
+// {
+//   int rc = strncmp(search_window, search_term, strlen(search_term));
+//   if (rc == 0) {
+//       debug("string match\n");
+//       return 1;
+//     } else {
+//       return 0;
+//     }
+//
+// error:
+//   return -1;
+// }
+
+
+int entry_search(struct Connection *file_conn, char *search_term)
 {
   int search_length = strlen(search_term);
   // If line is shorter than search term, skip:
@@ -104,30 +129,45 @@ int string_search(struct Connection *file_conn, char *search_term)
     return 0;
   }
 
-  printf("\n");
   debug("[LINE]: %s", file_conn->entry);
   debug("strlen(entry) = %ld", strlen(file_conn->entry));
-  debug("search_length for term \"%s\": %d", search_term, search_length);
-  debug("loop limit: %ld", strlen(file_conn->entry)-search_length);
+  debug("search_length for search pattern \"%s\": %d", search_term, search_length);
+  debug("loop limit: %ld\n", strlen(file_conn->entry)-search_length);
 
+  char *substring = NULL;
   for (int c = 0; c < strlen(file_conn->entry)-search_length+1; c++)
   {
-    // debug("%d", c);
+    debug("\tc: %d", c);
 
-    // int rc = strncmp(entry[c], search_term, search_length);
-    // if (rc == 0) {
-    //   printf("string match\n");
-    //   return 1;
-    // }
+    // substring = strndup(file_conn->entry+c, search_length);
+    // debug("\tsubstring: \"%s\"", substring);
+    //
+    // int rc = substring_search(substring, search_term);
+    // check(rc != -1, "substring_search failed at c: %d", c);
+    // if (rc == 1) {
+      //   // match!
+      //   return 1;
+      // }
+    // free(substring);
+
+    // Could the below lines be used in place of above 3 lines?
+    int rc = strncmp(file_conn->entry+c, search_term, search_length);
+    if (rc == 0) {
+        debug("string match\n");
+        return 1;
+      }
   }
   return 0;
+error:
+  if (substring) free(substring);
+  return -1;
 }
 
 
 int file_search(struct Connection *file_conn, char *search_term)
 {
   printf("\n");
-  log_info("file_search running on %s", file_conn->path);
+  log_info("file_search running on %s\n", file_conn->path);
 
   char *ret = "s";
 
@@ -143,11 +183,16 @@ int file_search(struct Connection *file_conn, char *search_term)
     // Eliminate the trailing newline character:
     file_conn->entry[strcspn(file_conn->entry, "\n")] = 0;
 
-    // search file_conn->entry for term(s) in question
-    int rc = string_search(file_conn, search_term);
+    // search file_conn->entry (the file's current line) for term(s) in question
+    int rc = entry_search(file_conn, search_term);
+    check(rc != -1, "entry_search failed at entry %s", file_conn->entry);
     if (rc == 1) {
-      printf("\t%s", file_conn->entry);
+      // match found!
+      printf("%s\n", file_conn->entry);
     }
+
+    // return 0;    // comment this out to search just first line of each file.
+
   } while (ret != NULL);
 
   return 0;
@@ -158,7 +203,7 @@ error:
 
 int main(int argc, char *argv[])
 {
-  check(argc == 2, "Need two arguments.");
+  check(argc == 2, "Need two arguments (second is search term).");
 
   char *log_list_loc = "./.logfind_files";
 
@@ -180,6 +225,9 @@ int main(int argc, char *argv[])
     check(rc != -1, "file_search failed at file %d: %s", i, log_list[i]);
 
     close_conn(file_conn);
+
+      // return 0;    // comment this out to limit searching to just first file.
+
   }
 
   // free stuff
