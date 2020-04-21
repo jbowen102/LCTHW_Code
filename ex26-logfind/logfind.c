@@ -122,26 +122,25 @@ error:
 // }
 
 
-int entry_search(struct Connection *file_conn, char **search_terms)
+int entry_search(struct Connection *file_conn, char *search_term)
 {
-  char *search_term = search_terms[0];
 
-  int search_length = strlen(search_term);
+  int pattern_length = strlen(search_term);
   // If line is shorter than search term, skip:
-  if (strlen(file_conn->entry) < search_length) {
+  if (strlen(file_conn->entry) < pattern_length) {
     return 0;
   }
 
   debug("[LINE]: %s", file_conn->entry);
   debug("strlen(entry) = %ld", strlen(file_conn->entry));
-  debug("search_length for search pattern \"%s\": %d", search_term, search_length);
-  debug("loop limit: %ld\n", strlen(file_conn->entry)-search_length);
+  debug("pattern_length for search pattern \"%s\": %d", search_term, pattern_length);
+  debug("loop limit: %ld\n", strlen(file_conn->entry)-pattern_length);
 
-  for (int c = 0; c < strlen(file_conn->entry)-search_length+1; c++)
+  for (int c = 0; c < strlen(file_conn->entry)-pattern_length+1; c++)
   {
     debug("\tc: %d", c);
 
-    int rc = strncmp(file_conn->entry+c, search_term, search_length);
+    int rc = strncmp(file_conn->entry+c, search_term, pattern_length);
     if (rc == 0) {
         debug("string match\n");
         return 1;
@@ -153,7 +152,7 @@ error:
 }
 
 
-int file_search_or(struct Connection *file_conn, char **search_terms)
+int file_search_or(struct Connection *file_conn, char **search_terms, int term_count)
 {
   printf("\n");
   log_info("file_search running on %s\n", file_conn->path);
@@ -172,15 +171,21 @@ int file_search_or(struct Connection *file_conn, char **search_terms)
     file_conn->entry[strcspn(file_conn->entry, "\n")] = 0;
 
     // search file_conn->entry (the file's current line) for term(s) in question
-    int rc = entry_search(file_conn, search_terms);
-    check(rc != -1, "entry_search failed at entry %s", file_conn->entry);
-    if (rc == 1) {
-      // match found!
-      printf("%s\n", file_conn->entry);
+    for (int i = 0; i < term_count; i++)
+    {
+      int rc = -1;
+      char *search_term = search_terms[i];
+
+      rc = entry_search(file_conn, search_term);
+      check(rc != -1, "entry_search failed at entry %s", file_conn->entry);
+      // If entry_search gets a hit, don't need to search for other terms in that line (OR logic).
+      if (rc == 1) {
+        // match found!
+        printf("%s\n", file_conn->entry);
+        break;
+      }
     }
-
     // return 0;    // to search just first line of each file.
-
   } while (ret != NULL);
 
   return 0;
@@ -188,7 +193,8 @@ error:
   return -1;
 }
 
-int file_search_and(struct Connection *file_conn, char **search_terms)
+
+int file_search_and(struct Connection *file_conn, char **search_terms, int term_count)
 {
   printf("\n");
   log_info("file_search running on %s\n", file_conn->path);
@@ -207,15 +213,21 @@ int file_search_and(struct Connection *file_conn, char **search_terms)
     file_conn->entry[strcspn(file_conn->entry, "\n")] = 0;
 
     // search file_conn->entry (the file's current line) for term(s) in question
-    int rc = entry_search(file_conn, search_terms);
-    check(rc != -1, "entry_search failed at entry %s", file_conn->entry);
-    if (rc == 1) {
-      // match found!
-      printf("%s\n", file_conn->entry);
+    for (int i = 0; i < term_count; i++)
+    {
+      int rc = -1;
+      char *search_term = search_terms[i];
+
+      rc = entry_search(file_conn, search_term);
+      check(rc != -1, "entry_search failed at entry %s", file_conn->entry);
+      // If entry_search gets a hit, don't need to search for other terms in that line (OR logic).
+      if (rc == 1) {
+        // match found!
+        printf("%s\n", file_conn->entry);
+        break;
+      }
     }
-
     // return 0;    // to search just first line of each file.
-
   } while (ret != NULL);
 
   return 0;
@@ -226,7 +238,6 @@ error:
 
 int main(int argc, char *argv[])
 {
-
   check(argc >= 2, "Need at least one search term (use \"-o\" for \"or\").");
 
   int and_mode;
@@ -267,9 +278,9 @@ int main(int argc, char *argv[])
 
     int rc = -1;
     if (and_mode) {
-      rc = file_search_or(file_conn, search_terms);
+      rc = file_search_or(file_conn, search_terms, term_count);
     } else {
-      rc = file_search_and(file_conn, search_terms);
+      rc = file_search_and(file_conn, search_terms, term_count);
     }
     check(rc != -1, "file_search failed at file %d: %s", i, log_list[i]);
 
