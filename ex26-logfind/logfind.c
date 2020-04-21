@@ -87,6 +87,7 @@ int fill_log_list(struct Connection *list_conn, char log_list[MAX_NUM_FILES][MAX
   for (int n = 0; n < file_index; n++) {
     printf("%d) %s\n", n, log_list[n]);
   }
+  printf("\n");
 
   // log_info("filepath: %s", list_conn->entry);
 
@@ -121,8 +122,10 @@ error:
 // }
 
 
-int entry_search(struct Connection *file_conn, char *search_term)
+int entry_search(struct Connection *file_conn, char **search_terms)
 {
+  char *search_term = search_terms[0];
+
   int search_length = strlen(search_term);
   // If line is shorter than search term, skip:
   if (strlen(file_conn->entry) < search_length) {
@@ -134,23 +137,10 @@ int entry_search(struct Connection *file_conn, char *search_term)
   debug("search_length for search pattern \"%s\": %d", search_term, search_length);
   debug("loop limit: %ld\n", strlen(file_conn->entry)-search_length);
 
-  char *substring = NULL;
   for (int c = 0; c < strlen(file_conn->entry)-search_length+1; c++)
   {
     debug("\tc: %d", c);
 
-    // substring = strndup(file_conn->entry+c, search_length);
-    // debug("\tsubstring: \"%s\"", substring);
-    //
-    // int rc = substring_search(substring, search_term);
-    // check(rc != -1, "substring_search failed at c: %d", c);
-    // if (rc == 1) {
-      //   // match!
-      //   return 1;
-      // }
-    // free(substring);
-
-    // Could the below lines be used in place of above 3 lines?
     int rc = strncmp(file_conn->entry+c, search_term, search_length);
     if (rc == 0) {
         debug("string match\n");
@@ -159,19 +149,17 @@ int entry_search(struct Connection *file_conn, char *search_term)
   }
   return 0;
 error:
-  if (substring) free(substring);
   return -1;
 }
 
 
-int file_search(struct Connection *file_conn, char *search_term)
+int file_search_or(struct Connection *file_conn, char **search_terms)
 {
   printf("\n");
   log_info("file_search running on %s\n", file_conn->path);
 
   char *ret = "s";
 
-  // fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
   do {
     // Reset string to all 0s:
     memset(file_conn->entry, 0, strlen(file_conn->entry));
@@ -184,14 +172,49 @@ int file_search(struct Connection *file_conn, char *search_term)
     file_conn->entry[strcspn(file_conn->entry, "\n")] = 0;
 
     // search file_conn->entry (the file's current line) for term(s) in question
-    int rc = entry_search(file_conn, search_term);
+    int rc = entry_search(file_conn, search_terms);
     check(rc != -1, "entry_search failed at entry %s", file_conn->entry);
     if (rc == 1) {
       // match found!
       printf("%s\n", file_conn->entry);
     }
 
-    // return 0;    // comment this out to search just first line of each file.
+    // return 0;    // to search just first line of each file.
+
+  } while (ret != NULL);
+
+  return 0;
+error:
+  return -1;
+}
+
+int file_search_and(struct Connection *file_conn, char **search_terms)
+{
+  printf("\n");
+  log_info("file_search running on %s\n", file_conn->path);
+
+  char *ret = "s";
+
+  do {
+    // Reset string to all 0s:
+    memset(file_conn->entry, 0, strlen(file_conn->entry));
+
+    // Read line in from file.
+    ret = fgets(file_conn->entry, MAX_BUFFER, file_conn->file);
+    check(strlen(file_conn->entry) < MAX_BUFFER - 1, "Possible entry truncation: %s", file_conn->entry);
+
+    // Eliminate the trailing newline character:
+    file_conn->entry[strcspn(file_conn->entry, "\n")] = 0;
+
+    // search file_conn->entry (the file's current line) for term(s) in question
+    int rc = entry_search(file_conn, search_terms);
+    check(rc != -1, "entry_search failed at entry %s", file_conn->entry);
+    if (rc == 1) {
+      // match found!
+      printf("%s\n", file_conn->entry);
+    }
+
+    // return 0;    // to search just first line of each file.
 
   } while (ret != NULL);
 
@@ -203,10 +226,33 @@ error:
 
 int main(int argc, char *argv[])
 {
-  check(argc == 2, "Need two arguments (second is search term).");
+
+  check(argc >= 2, "Need at least one search term (use \"-o\" for \"or\").");
+
+  int and_mode;
+  int term_count;
+  char **search_terms;
+  if (strncmp(argv[1], "-o", 2) == 0) {
+    check(argc > 2, "Need a search term after the \"-o\"");
+    and_mode = 0;
+    term_count = argc-2;
+    search_terms = argv+2;
+  } else {
+    and_mode = 1;
+    term_count = argc-1;
+    search_terms = argv+1;
+  }
+
+  debug("mode: %s\n", (and_mode ? "AND" : "OR"));
+
+  debug("term_count: %d", term_count);
+  debug("search_terms:");
+  for (int i = 0; i < term_count; i++)
+  {
+    debug("\t%s", search_terms[i]);
+  }
 
   char *log_list_loc = "./.logfind_files";
-
   struct Connection *list_conn = create_conn(log_list_loc);
 
   char log_list[MAX_NUM_FILES][MAX_PATH_LEN];
@@ -214,14 +260,17 @@ int main(int argc, char *argv[])
   int file_count = fill_log_list(list_conn, log_list);
   check(file_count != -1, "fill_log_list failed");
 
-  char *search_term = argv[1];
-
   struct Connection *file_conn;
   for (int i = 0; i < file_count; i++)
   {
     file_conn = create_conn(log_list[i]);
 
-    int rc = file_search(file_conn, search_term);
+    int rc = -1;
+    if (and_mode) {
+      rc = file_search_or(file_conn, search_terms);
+    } else {
+      rc = file_search_and(file_conn, search_terms);
+    }
     check(rc != -1, "file_search failed at file %d: %s", i, log_list[i]);
 
     close_conn(file_conn);
