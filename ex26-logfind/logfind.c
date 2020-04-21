@@ -12,7 +12,8 @@
 struct Connection {
   FILE *file;
   char path[MAX_PATH_LEN];
-  char entry[MAX_PATH_LEN];
+  char entry[MAX_BUFFER];
+  // char entry[MAX_PATH_LEN];  // Shouldn't this be MAX_BUFFER instead?
 };
 
 
@@ -131,18 +132,19 @@ int entry_search(struct Connection *file_conn, char *search_term)
     return 0;
   }
 
+  debug("[PATTERN]: %s", search_term);
   debug("[LINE]: %s", file_conn->entry);
-  debug("strlen(entry) = %ld", strlen(file_conn->entry));
-  debug("pattern_length for search pattern \"%s\": %d", search_term, pattern_length);
-  debug("loop limit: %ld\n", strlen(file_conn->entry)-pattern_length);
+  // debug("strlen(entry) = %ld", strlen(file_conn->entry));
+  // debug("pattern_length for search pattern \"%s\": %d", search_term, pattern_length);
+  // debug("loop limit: %ld\n", strlen(file_conn->entry)-pattern_length);
 
   for (int c = 0; c < strlen(file_conn->entry)-pattern_length+1; c++)
   {
-    debug("\tc: %d", c);
+    // debug("\tc: %d", c);
 
     int rc = strncmp(file_conn->entry+c, search_term, pattern_length);
     if (rc == 0) {
-        debug("string match\n");
+        debug("string match (\"%s\")", search_term);
         return 1;
       }
   }
@@ -201,6 +203,17 @@ int file_search_and(struct Connection *file_conn, char **search_terms, int term_
 
   char *ret = "s";
 
+  // Create a buffer and a score-keeping list
+  int expect_max_match_lines = MAX_BUFFER; // max number of line matches.
+  int match_count = 0;
+  // char **entry_match_buffer = malloc(MAX_BUFFER * expect_max_match_lines);
+  char entry_match_buffer[expect_max_match_lines][MAX_BUFFER];
+
+  int *term_match_bitmask = calloc(term_count * sizeof(int), 1);
+  // check_mem(entry_match_buffer);
+  check_mem(term_match_bitmask);
+  // https://stackoverflow.com/questions/3082914/c-compile-error-variable-sized-object-may-not-be-initialized
+
   do {
     // Reset string to all 0s:
     memset(file_conn->entry, 0, strlen(file_conn->entry));
@@ -223,15 +236,62 @@ int file_search_and(struct Connection *file_conn, char **search_terms, int term_
       // If entry_search gets a hit, don't need to search for other terms in that line (OR logic).
       if (rc == 1) {
         // match found!
-        printf("%s\n", file_conn->entry);
-        break;
+        term_match_bitmask[i] = 1;
+        debug("term_match_bitmask bit %d of %d set to 1", i, term_count);
+
+        // entry_match_buffer[match_count++] = file_conn->entry;
+        // this doesn't work because they both point to the same data,
+        // and the data is replaced each iteration.
+
+        strcpy(entry_match_buffer[match_count++], file_conn->entry);
+        // strcpy(entry_match_buffer[0], file_conn->entry);
+        // strncpy(entry_match_buffer[0], file_conn->entry, strlen(file_conn->entry));
+        // strncpy(entry_match_buffer[match_count], file_conn->entry, strlen(file_conn->entry));
+        // strcpy(entry_match_buffer[match_count++], file_conn->entry);
+        // file_conn->entry guaranteed to not be larger than MAX_BUFFER by fgets() arg above.
+
+        debug("match_count: %d", match_count);
+        debug("Added this line to the entry_match_buffer at pos %d:\n\t%s", match_count-1, file_conn->entry);
+        debug("entry_match_buffer[%d]: %s\n", match_count-1, entry_match_buffer[match_count-1]);
+
+        check(match_count < expect_max_match_lines, "Exceeded %d match lines.", expect_max_match_lines);
+        // if (match_count > expect_max_match_lines) {
+        //   char **entry_match_buffer = realloc(entry_match_buffer, MAX_BUFFER * ++expect_max_match_lines);
+        //   check_mem(entry_match_buffer);
+        // }
       }
     }
-    // return 0;    // to search just first line of each file.
+    // return 0;    // uncomment to search just first line of each file.
   } while (ret != NULL);
 
+  // See if all terms were matched
+  int unique_matches = 0;
+  for (int n = 0; n < term_count; n++)
+  {
+    if (term_match_bitmask[n]) {
+      unique_matches++;
+    }
+  }
+  debug("Unique matches: %d", unique_matches);
+  debug("Total lines matching: %d", match_count);
+
+  // If all terms have been found in the present file, print all the buffered lines.
+  if (unique_matches == term_count)
+  {
+    debug("unique_matches %d = term_count %d", unique_matches, term_count);
+    for (int line = 0; line < match_count; line++)
+    {
+      printf("%s\n", entry_match_buffer[line]);
+    }
+  }
+
+
+  free(term_match_bitmask);
+  // free(entry_match_buffer);
   return 0;
 error:
+  if (term_match_bitmask) free(term_match_bitmask);
+  // if (entry_match_buffer) free(entry_match_buffer);
   return -1;
 }
 
@@ -248,6 +308,11 @@ int main(int argc, char *argv[])
     and_mode = 0;
     term_count = argc-2;
     search_terms = argv+2;
+  } else if (argc == 2) {
+    // If only two arguments, also run in OR mode since it should be faster.
+    and_mode = 0;
+    term_count = 1;
+    search_terms = argv+1;
   } else {
     and_mode = 1;
     term_count = argc-1;
@@ -278,16 +343,15 @@ int main(int argc, char *argv[])
 
     int rc = -1;
     if (and_mode) {
-      rc = file_search_or(file_conn, search_terms, term_count);
-    } else {
       rc = file_search_and(file_conn, search_terms, term_count);
+    } else {
+      rc = file_search_or(file_conn, search_terms, term_count);
     }
     check(rc != -1, "file_search failed at file %d: %s", i, log_list[i]);
 
     close_conn(file_conn);
 
-      // return 0;    // comment this out to limit searching to just first file.
-
+    // return 0;    // uncomment to limit searching to just first file.
   }
 
   // free stuff
