@@ -1,6 +1,6 @@
 CFLAGS=-Wall -g
 
-all: logfind
+all: glob_test
 
 clean:
-	rm -f logfind
+	rm -f glob_test
